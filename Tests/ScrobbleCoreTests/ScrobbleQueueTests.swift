@@ -250,3 +250,27 @@ final class AuthTests: XCTestCase {
         )
     }
 }
+
+final class StatusSummaryTests: XCTestCase {
+    private func summary(
+        lastfm: ServiceState = .ok, listenbrainz: ServiceState = .ok,
+        connected: (Bool, Bool) = (true, true), pending: Int = 0, failed: Int = 0
+    ) -> StatusSummary {
+        StatusSummary.make(
+            status: QueueStatus(lastfm: lastfm, listenbrainz: listenbrainz, lastFlush: nil),
+            lastfmConnected: connected.0, listenbrainzConnected: connected.1, pending: pending, failed: failed
+        )
+    }
+
+    func testMostUrgentStateWins() {
+        XCTAssertEqual(summary(), StatusSummary(level: .good, headline: "All caught up"))
+        XCTAssertEqual(summary(pending: 3).level, .attention)
+        XCTAssertEqual(summary(pending: 3).headline, "3 scrobbles waiting")
+        XCTAssertEqual(summary(listenbrainz: .failing("ListenBrainz HTTP 503"), pending: 1).headline,
+                       "Retrying: ListenBrainz HTTP 503")
+        XCTAssertEqual(summary(pending: 2, failed: 1).headline, "1 scrobble failed")
+        XCTAssertEqual(summary(lastfm: .suspended, failed: 4).headline, "Last.fm suspended this app's API key")
+        XCTAssertEqual(summary(connected: (false, false)).level, .problem)
+        XCTAssertEqual(summary(connected: (true, false)).headline, "ListenBrainz not connected")
+    }
+}

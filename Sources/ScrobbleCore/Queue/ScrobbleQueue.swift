@@ -37,6 +37,8 @@ public struct FlushReport: Sendable, Equatable {
     public var lastfmSent = 0
     public var listenbrainzSent = 0
     public var failed = 0
+
+    public init() {}
 }
 
 /// Stores plays and sends them to Last.fm and ListenBrainz.
