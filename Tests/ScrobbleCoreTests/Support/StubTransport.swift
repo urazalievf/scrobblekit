@@ -9,9 +9,10 @@ final class StubTransport: HTTPTransport, @unchecked Sendable {
     struct Response {
         var status: Int
         var body: Data
+        var headers: [String: String] = [:]
 
-        static func json(_ body: String, status: Int = 200) -> Response {
-            Response(status: status, body: Data(body.utf8))
+        static func json(_ body: String, status: Int = 200, headers: [String: String] = [:]) -> Response {
+            Response(status: status, body: Data(body.utf8), headers: headers)
         }
     }
 
@@ -27,9 +28,17 @@ final class StubTransport: HTTPTransport, @unchecked Sendable {
         guard !queued.isEmpty else { throw URLError(.resourceUnavailable) }
         let response = queued.removeFirst()
         let http = HTTPURLResponse(
-            url: request.url!, statusCode: response.status, httpVersion: "HTTP/1.1", headerFields: nil
+            url: request.url!, statusCode: response.status, httpVersion: "HTTP/1.1", headerFields: response.headers
         )!
         return (response.body, http)
+    }
+}
+
+extension URLRequest {
+    /// The body parsed as a JSON object, for comparing against an expected dictionary.
+    var jsonBody: NSDictionary? {
+        guard let body = httpBody else { return nil }
+        return try? JSONSerialization.jsonObject(with: body) as? NSDictionary
     }
 }
 
