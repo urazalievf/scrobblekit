@@ -147,22 +147,11 @@ public struct LastFMClient: Sendable {
         return data
     }
 
-    /// Percent-encodes everything except RFC 3986 unreserved characters, so
-    /// `&`, `=`, `+` and spaces in track names can't break the body.
     static func formEncode(_ parameters: [String: String]) -> String {
         parameters
             .sorted { $0.key < $1.key }
-            .map { "\(escape($0.key))=\(escape($0.value))" }
+            .map { "\($0.key.percentEncodedUnreserved)=\($0.value.percentEncodedUnreserved)" }
             .joined(separator: "&")
-    }
-
-    private static let unreserved = CharacterSet(
-        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
-    )
-
-    private static func escape(_ string: String) -> String {
-        // Only fails for strings that aren't valid Unicode, which a Swift String always is.
-        string.addingPercentEncoding(withAllowedCharacters: unreserved)!
     }
 }
 
