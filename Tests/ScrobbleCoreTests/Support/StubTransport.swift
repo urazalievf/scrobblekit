@@ -2,9 +2,7 @@ import Foundation
 @testable import ScrobbleCore
 
 /// Records requests and replies with queued canned responses, in order.
-///
-/// `@unchecked Sendable` with no lock is safe only because each test uses its
-/// own instance and awaits one request at a time.
+/// State is guarded by a lock because some tests send concurrently.
 final class StubTransport: HTTPTransport, @unchecked Sendable {
     struct Response {
         var status: Int
@@ -16,17 +14,22 @@ final class StubTransport: HTTPTransport, @unchecked Sendable {
         }
     }
 
+    private let lock = NSLock()
     private var queued: [Response]
-    private(set) var requests: [URLRequest] = []
+    private var recorded: [URLRequest] = []
+
+    var requests: [URLRequest] { lock.withLock { recorded } }
 
     init(_ responses: Response...) {
         queued = responses
     }
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        requests.append(request)
-        guard !queued.isEmpty else { throw URLError(.resourceUnavailable) }
-        let response = queued.removeFirst()
+        let next: Response? = lock.withLock {
+            recorded.append(request)
+            return queued.isEmpty ? nil : queued.removeFirst()
+        }
+        guard let response = next else { throw URLError(.resourceUnavailable) }
         let http = HTTPURLResponse(
             url: request.url!, statusCode: response.status, httpVersion: "HTTP/1.1", headerFields: response.headers
         )!

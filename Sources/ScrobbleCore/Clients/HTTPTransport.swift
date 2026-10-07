@@ -15,3 +15,17 @@ extension URLSession: HTTPTransport {
         return (data, http)
     }
 }
+
+extension String {
+    private static let unreserved = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+    )
+
+    /// Percent-encodes everything except RFC 3986 unreserved characters, so
+    /// `&`, `=`, `+` and spaces in track names can't break a form body or
+    /// query string.
+    var percentEncodedUnreserved: String {
+        // Only fails for strings that aren't valid Unicode, which a Swift String always is.
+        addingPercentEncoding(withAllowedCharacters: Self.unreserved)!
+    }
+}
