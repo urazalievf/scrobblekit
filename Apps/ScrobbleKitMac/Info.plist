@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>ScrobbleKit asks Music for the current track once when it starts, so a song that is already playing gets scrobbled.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Last.fm login callback</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>scrobblekit</string>
+			</array>
+		</dict>
+	</array>
+	<key>LastFMAPIKey</key>
+	<string></string>
+	<key>LastFMSharedSecret</key>
+	<string></string>
+</dict>
+</plist>
