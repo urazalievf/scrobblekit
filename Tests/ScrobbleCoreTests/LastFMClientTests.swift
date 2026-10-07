@@ -176,6 +176,7 @@ final class LastFMClientTests: XCTestCase {
             (11, 503, .serviceOffline),
             (16, 500, .temporaryError),
             (29, 429, .rateLimitExceeded),
+            (26, 403, .apiKeySuspended),
             (13, 403, .api(code: 13, message: "Invalid method signature supplied")),
             (9, 200, .invalidSession), // error body on HTTP 200 still counts
         ]
