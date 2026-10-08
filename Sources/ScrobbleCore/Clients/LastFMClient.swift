@@ -35,6 +35,9 @@ public enum LastFMError: Error, Equatable {
     case temporaryError
     /// Error 29: rate limit exceeded.
     case rateLimitExceeded
+    /// Error 26: Last.fm suspended this API key (the client is banned).
+    /// Retrying won't help; scrobbling to Last.fm should stop.
+    case apiKeySuspended
     /// Any other Last.fm error code.
     case api(code: Int, message: String)
     /// A non-2xx response with no Last.fm error body.
@@ -49,6 +52,7 @@ public enum LastFMError: Error, Equatable {
         case 9: self = .invalidSession
         case 11: self = .serviceOffline
         case 16: self = .temporaryError
+        case 26: self = .apiKeySuspended
         case 29: self = .rateLimitExceeded
         default: self = .api(code: code, message: message)
         }

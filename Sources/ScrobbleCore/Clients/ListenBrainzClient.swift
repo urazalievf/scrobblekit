@@ -102,6 +102,27 @@ public struct ListenBrainzClient: Sendable {
         return userName
     }
 
+    /// GET /1/user/{user}/listens: up to 100 of the user's listens at or after
+    /// `since`, newest first. Public; no token needed.
+    public func listens(user: String, since: Date) async throws -> [Scrobble] {
+        let path = "user/\(user.percentEncodedUnreserved)/listens"
+            + "?min_ts=\(Int(since.timeIntervalSince1970))&count=100"
+        var request = URLRequest(url: URL(string: Self.baseURL.absoluteString + path)!)
+        request.httpMethod = "GET"
+
+        let data = try await send(request)
+        guard let response = try? JSONDecoder().decode(ListensResponse.self, from: data) else {
+            throw ListenBrainzError.unexpectedResponse
+        }
+        return response.payload.listens.map {
+            Scrobble(
+                artist: $0.trackMetadata.artistName, track: $0.trackMetadata.trackName,
+                album: $0.trackMetadata.releaseName,
+                listenedAt: Date(timeIntervalSince1970: TimeInterval($0.listenedAt))
+            )
+        }
+    }
+
     /// Returns the body of a 2xx response and maps everything else to ListenBrainzError.
     private func send(_ request: URLRequest) async throws -> Data {
         let (data, response) = try await transport.send(request)
@@ -201,4 +222,34 @@ private struct ValidateTokenResponse: Decodable {
         case valid
         case userName = "user_name"
     }
+}
+
+private struct ListensResponse: Decodable {
+    struct Payload: Decodable {
+        let listens: [Item]
+    }
+
+    struct Item: Decodable {
+        struct Metadata: Decodable {
+            let artistName: String
+            let trackName: String
+            let releaseName: String?
+
+            enum CodingKeys: String, CodingKey {
+                case artistName = "artist_name"
+                case trackName = "track_name"
+                case releaseName = "release_name"
+            }
+        }
+
+        let listenedAt: Int
+        let trackMetadata: Metadata
+
+        enum CodingKeys: String, CodingKey {
+            case listenedAt = "listened_at"
+            case trackMetadata = "track_metadata"
+        }
+    }
+
+    let payload: Payload
 }

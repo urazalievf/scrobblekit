@@ -1,0 +1,463 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		5C0B000000000000000015AA /* ScrobbleCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5C0B000000000000000016AA /* ScrobbleCore */; };
+		5C0B000000000000000022AA /* ScrobbleCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5C0B000000000000000023AA /* ScrobbleCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		5C0B000000000000000008AA /* ScrobbleKit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ScrobbleKit.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5C0B000000000000000009AA /* ScrobbleKit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ScrobbleKit.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5C0B000000000000000006AA /* Exceptions for "ScrobbleKitMac" folder in "ScrobbleKitMac" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				ScrobbleKitMac.entitlements,
+			);
+			target = 5C0B000000000000000010AA /* ScrobbleKitMac */;
+		};
+		5C0B000000000000000007AA /* Exceptions for "ScrobbleKitiOS" folder in "ScrobbleKitiOS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 5C0B000000000000000017AA /* ScrobbleKitiOS */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		5C0B000000000000000004AA /* ScrobbleKitMac */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5C0B000000000000000006AA /* Exceptions for "ScrobbleKitMac" folder in "ScrobbleKitMac" target */,
+			);
+			path = ScrobbleKitMac;
+			sourceTree = "<group>";
+		};
+		5C0B000000000000000005AA /* ScrobbleKitiOS */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5C0B000000000000000007AA /* Exceptions for "ScrobbleKitiOS" folder in "ScrobbleKitiOS" target */,
+			);
+			path = ScrobbleKitiOS;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5C0B000000000000000012AA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5C0B000000000000000015AA /* ScrobbleCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5C0B000000000000000019AA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5C0B000000000000000022AA /* ScrobbleCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		5C0B000000000000000002AA = {
+			isa = PBXGroup;
+			children = (
+				5C0B000000000000000004AA /* ScrobbleKitMac */,
+				5C0B000000000000000005AA /* ScrobbleKitiOS */,
+				5C0B000000000000000003AA /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5C0B000000000000000003AA /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				5C0B000000000000000008AA /* ScrobbleKit.app */,
+				5C0B000000000000000009AA /* ScrobbleKit.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		5C0B000000000000000010AA /* ScrobbleKitMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5C0B000000000000000026AA /* Build configuration list for PBXNativeTarget "ScrobbleKitMac" */;
+			buildPhases = (
+				5C0B000000000000000011AA /* Sources */,
+				5C0B000000000000000012AA /* Frameworks */,
+				5C0B000000000000000013AA /* Resources */,
+				5C0B000000000000000014AA /* Inject Last.fm keys from .env */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				5C0B000000000000000004AA /* ScrobbleKitMac */,
+			);
+			name = ScrobbleKitMac;
+			packageProductDependencies = (
+				5C0B000000000000000016AA /* ScrobbleCore */,
+			);
+			productName = ScrobbleKitMac;
+			productReference = 5C0B000000000000000008AA /* ScrobbleKit.app */;
+			productType = "com.apple.product-type.application";
+		};
+		5C0B000000000000000017AA /* ScrobbleKitiOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5C0B000000000000000027AA /* Build configuration list for PBXNativeTarget "ScrobbleKitiOS" */;
+			buildPhases = (
+				5C0B000000000000000018AA /* Sources */,
+				5C0B000000000000000019AA /* Frameworks */,
+				5C0B000000000000000020AA /* Resources */,
+				5C0B000000000000000021AA /* Inject Last.fm keys from .env */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				5C0B000000000000000005AA /* ScrobbleKitiOS */,
+			);
+			name = ScrobbleKitiOS;
+			packageProductDependencies = (
+				5C0B000000000000000023AA /* ScrobbleCore */,
+			);
+			productName = ScrobbleKitiOS;
+			productReference = 5C0B000000000000000009AA /* ScrobbleKit.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		5C0B000000000000000001AA /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					5C0B000000000000000010AA = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					5C0B000000000000000017AA = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = 5C0B000000000000000025AA /* Build configuration list for PBXProject "ScrobbleKit" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 5C0B000000000000000002AA;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5C0B000000000000000024AA /* XCLocalSwiftPackageReference ".." */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5C0B000000000000000003AA /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				5C0B000000000000000010AA /* ScrobbleKitMac */,
+				5C0B000000000000000017AA /* ScrobbleKitiOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5C0B000000000000000013AA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5C0B000000000000000020AA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		5C0B000000000000000014AA /* Inject Last.fm keys from .env */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "Inject Last.fm keys from .env";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/../scripts/inject-lastfm-keys.sh\"\n";
+		};
+		5C0B000000000000000021AA /* Inject Last.fm keys from .env */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "Inject Last.fm keys from .env";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/../scripts/inject-lastfm-keys.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5C0B000000000000000011AA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5C0B000000000000000018AA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		5C0B000000000000000028AA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = DT9JP293AM;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				MARKETING_VERSION = 0.1.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		5C0B000000000000000029AA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = DT9JP293AM;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				MARKETING_VERSION = 0.1.0;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		5C0B000000000000000030AA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = ScrobbleKitMac/ScrobbleKitMac.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 10000;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScrobbleKitMac/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ScrobbleKit;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 Feruz Urazaliev. MIT License.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.feruzurazaliev.scrobblekit.mac;
+				PRODUCT_NAME = ScrobbleKit;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		5C0B000000000000000031AA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = ScrobbleKitMac/ScrobbleKitMac.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 10000;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScrobbleKitMac/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ScrobbleKit;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 Feruz Urazaliev. MIT License.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.feruzurazaliev.scrobblekit.mac;
+				PRODUCT_NAME = ScrobbleKit;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		5C0B000000000000000032AA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CURRENT_PROJECT_VERSION = 0;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScrobbleKitiOS/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ScrobbleKit;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.feruzurazaliev.scrobblekit;
+				PRODUCT_NAME = ScrobbleKit;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		5C0B000000000000000033AA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CURRENT_PROJECT_VERSION = 0;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScrobbleKitiOS/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ScrobbleKit;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.feruzurazaliev.scrobblekit;
+				PRODUCT_NAME = ScrobbleKit;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5C0B000000000000000025AA /* Build configuration list for PBXProject "ScrobbleKit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5C0B000000000000000028AA /* Debug */,
+				5C0B000000000000000029AA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5C0B000000000000000026AA /* Build configuration list for PBXNativeTarget "ScrobbleKitMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5C0B000000000000000030AA /* Debug */,
+				5C0B000000000000000031AA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5C0B000000000000000027AA /* Build configuration list for PBXNativeTarget "ScrobbleKitiOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5C0B000000000000000032AA /* Debug */,
+				5C0B000000000000000033AA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		5C0B000000000000000024AA /* XCLocalSwiftPackageReference ".." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ..;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5C0B000000000000000016AA /* ScrobbleCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ScrobbleCore;
+		};
+		5C0B000000000000000023AA /* ScrobbleCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ScrobbleCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 5C0B000000000000000001AA /* Project object */;
+}
