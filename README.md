@@ -149,6 +149,12 @@ unreachable, and refreshes every 60 seconds while the tab is visible.
 Microphone listening, Spotify / YouTube Music / Tidal, social features,
 multiple users, Apple Watch and iPad layouts.
 
+## Sponsor
+
+ScrobbleKit is free. If it's useful to you, you can back my work through
+[GitHub Sponsors](https://github.com/sponsors/urazalievf) or
+[Patreon](https://www.patreon.com/furazaliev).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
