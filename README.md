@@ -152,7 +152,8 @@ multiple users, Apple Watch and iPad layouts.
 ## Sponsor
 
 ScrobbleKit is free. If it's useful to you, you can back my work through
-[GitHub Sponsors](https://github.com/sponsors/urazalievf).
+[GitHub Sponsors](https://github.com/sponsors/urazalievf) or
+[Patreon](https://www.patreon.com/furazaliev).
 
 ## License
 
