@@ -42,7 +42,7 @@ struct OnboardingView: View {
 
     private var welcome: some View {
         OnboardingPage(symbol: "waveform", title: "ScrobbleKit") {
-            Text("Sends what you play in Apple Music to Last.fm and ListenBrainz. Every play goes to both.")
+            Text("Sends what you play in Apple Music to ListenBrainz, and to Last.fm if you use it.")
                 .font(.title3)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
@@ -56,9 +56,11 @@ struct OnboardingView: View {
                       text: "Plays are caught in real time.")
                 Point(symbol: "moon.zzz.fill", title: "In the background",
                       text: "iOS lets ScrobbleKit check Recently Played every so often, on its own schedule.")
-                Point(symbol: "arrow.triangle.2.circlepath", title: "With a Shortcut",
-                      text: "An hourly “Sync Scrobbles” automation fills the gaps.")
-                Text("Expect roughly 85–95% of plays. Replaying the same song between check-ins can be missed. ScrobbleKit for Mac catches everything played on your Mac.")
+                Point(symbol: "arrow.triangle.2.circlepath", title: "With Shortcuts",
+                      text: "Run “Sync Scrobbles” when your headphones or CarPlay disconnect.")
+                Point(symbol: "laptopcomputer", title: "With a Mac",
+                      text: "ScrobbleKit for Mac checks your account's Recently Played every few minutes while it's awake, your iPhone's plays included.")
+                Text("Expect roughly 85–95% of plays from the iPhone alone. Replaying the same song between checks can be missed.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.top, 4)
@@ -69,7 +71,7 @@ struct OnboardingView: View {
     private var permission: some View {
         OnboardingPage(symbol: "music.note", title: "Apple Music access") {
             VStack(spacing: 16) {
-                Text("ScrobbleKit needs to see what you play. Nothing leaves your phone except the scrobbles you send to Last.fm and ListenBrainz.")
+                Text("ScrobbleKit needs to see what you play. Nothing leaves your phone except the scrobbles you send to ListenBrainz and Last.fm.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                 if model.musicAuthorized {
@@ -82,7 +84,7 @@ struct OnboardingView: View {
                         .buttonStyle(.bordered)
                         .buttonBorderShape(.capsule)
                 }
-                Text("Connect Last.fm and ListenBrainz next, from Settings (the gear on the home screen).")
+                Text("Connect ListenBrainz next (and Last.fm, if you use it) from Settings, the gear on the home screen.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

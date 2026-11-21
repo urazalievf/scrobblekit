@@ -28,6 +28,14 @@ struct HomeView: View {
                     }
                 }
 
+                if !records.isEmpty || model.listenbrainzUser != nil {
+                    Section {
+                        RecapView(summary: model.recap, sentence: model.recapSentence,
+                                  sourceLabel: model.historySourceLabel, isLoading: model.isLoadingRecap)
+                            .padding(.vertical, 4)
+                    }
+                }
+
                 Section {
                     if records.isEmpty {
                         ContentUnavailableView(
@@ -53,7 +61,7 @@ struct HomeView: View {
                 } header: {
                     Text("Recent Scrobbles")
                 } footer: {
-                    Text("iPhone apps can't watch Apple Music all the time. ScrobbleKit catches plays while it's open, when iOS lets it check in the background, and whenever your Sync Scrobbles shortcut runs. Expect roughly 85–95% of plays.")
+                    Text("iPhone apps can't watch Apple Music all the time. ScrobbleKit catches plays while it's open, when iOS lets it check in the background, and whenever your Sync Scrobbles automations run. Expect roughly 85–95% of plays; ScrobbleKit for Mac can cover the rest.")
                 }
             }
             .listStyle(.insetGrouped)
@@ -68,7 +76,11 @@ struct HomeView: View {
                     .accessibilityLabel("Settings")
                 }
             }
-            .refreshable { await model.sync() }
+            .refreshable {
+                await model.sync()
+                await model.refreshRecap()
+            }
+            .task { await model.refreshRecap() }
             .sheet(isPresented: $showingSettings) {
                 SettingsView()
             }

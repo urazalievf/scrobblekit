@@ -42,12 +42,32 @@ enum BackgroundTaskScheduler {
         }
     }
 
+    /// iOS 27 deprecates `submit(_:)` for `submitTaskRequest(_:)`, which
+    /// reports every failure and mustn't run on the main thread. The newer
+    /// call needs the iOS 27 SDK (Swift 6.4); older SDKs and iOS 17–26 use
+    /// the original one.
     private static func submit(_ request: BGTaskRequest) {
+        #if compiler(>=6.4)
+        if #available(iOS 27.0, *) {
+            Task.detached(priority: .utility) {
+                do {
+                    try await BGTaskScheduler.shared.submitTaskRequest(request)
+                } catch {
+                    logFailure(request, error)
+                }
+            }
+            return
+        }
+        #endif
         do {
             try BGTaskScheduler.shared.submit(request)
         } catch {
-            Log.capture.error("Couldn't schedule \(request.identifier, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            logFailure(request, error)
         }
+    }
+
+    private nonisolated static func logFailure(_ request: BGTaskRequest, _ error: Error) {
+        Log.capture.error("Couldn't schedule \(request.identifier, privacy: .public): \(error.localizedDescription, privacy: .public)")
     }
 
     /// 2 a.m. tonight, or tomorrow if that has passed.

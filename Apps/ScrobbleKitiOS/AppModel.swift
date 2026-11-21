@@ -28,6 +28,9 @@ final class AppModel {
     private(set) var isSyncing = false
     private(set) var lastSync: Date?
     private(set) var musicAuthorized = false
+    private(set) var recap: ListeningSummary?
+    private(set) var recapSentence: String?
+    private(set) var isLoadingRecap = false
 
     /// On by default. See SettingsView for what it does on iPhone.
     var ignoreOtherDevices: Bool {
@@ -36,8 +39,11 @@ final class AppModel {
 
     @ObservationIgnored private let resolver: MBIDResolver
     @ObservationIgnored private let monitor = ForegroundMonitor()
-    @ObservationIgnored private let poller = RecentPlaysPoller()
+    /// 4 pages = the last 120 tracks: background checks can be hours apart.
+    @ObservationIgnored private let poller = RecentPlaysPoller(pages: 4)
+    @ObservationIgnored private let recentSync: RecentPlaysSync
     @ObservationIgnored private let listenbrainzClient = ListenBrainzClient()
+    @ObservationIgnored private let lastfmClient: LastFMClient?
 
     private enum Keys {
         static let ignoreOtherDevices = "ignoreOtherDevices"
@@ -57,6 +63,7 @@ final class AppModel {
         let keys = Self.lastfmKeysFromBundle()
         lastfmAPIKey = keys?.apiKey
         let lastfmClient = keys.map { LastFMClient(apiKey: $0.apiKey, sharedSecret: $0.secret) }
+        self.lastfmClient = lastfmClient
         let lastfmAuth = lastfmClient.map { LastFMAuth(client: $0) }
         let listenbrainzAuth = ListenBrainzAuth()
         self.lastfmAuth = lastfmAuth
@@ -73,6 +80,7 @@ final class AppModel {
             }
         )
 
+        recentSync = RecentPlaysSync(poller: poller, queue: queue)
         lastfmUser = lastfmAuth?.username
         listenbrainzUser = listenbrainzAuth.username
         musicAuthorized = MusicAuthorization.currentStatus == .authorized
@@ -148,6 +156,10 @@ final class AppModel {
                 }
                 await flush()
             }
+        case .finished(let scrobble):
+            // ListenBrainz gets the play now, with how long it played.
+            queue.recordPlayedTime(scrobble)
+            Task { await flush() }
         }
     }
 
@@ -175,21 +187,9 @@ final class AppModel {
     private func pollRecentlyPlayed() async {
         guard musicAuthorized else { return }
         do {
-            var plays = try await poller.poll(now: Date())
-            if ignoreOtherDevices, let user = listenbrainzUser,
-               let earliest = plays.map(\.scrobble.listenedAt).min() {
-                // Plays another device already scrobbled show up in the user's
-                // ListenBrainz history; skip those.
-                if let history = try? await listenbrainzClient.listens(
-                    user: user, since: earliest.addingTimeInterval(-OtherDeviceFilter.window)
-                ) {
-                    let kept = OtherDeviceFilter.removingAlreadyScrobbled(plays.map(\.scrobble), history: history)
-                    plays = plays.filter { kept.contains($0.scrobble) }
-                }
-            }
-            for play in plays {
-                try await queue.enqueue(play.scrobble, source: play.source)
-            }
+            // Plays another device already scrobbled show up in the user's
+            // ListenBrainz history; with "Ignore other devices" on, skip those.
+            _ = try await recentSync.run(listenbrainzUser: listenbrainzUser, checkListenBrainz: ignoreOtherDevices)
         } catch {
             Log.capture.error("Recently Played poll failed: \(error.localizedDescription, privacy: .public)")
         }
@@ -214,7 +214,12 @@ final class AppModel {
 
     func completeLastFMLogin(callbackURL: URL) async throws {
         guard let lastfmAuth, let token = LastFMAuth.token(from: callbackURL) else { return }
-        lastfmUser = try await lastfmAuth.completeLogin(token: token).username
+        do {
+            lastfmUser = try await lastfmAuth.completeLogin(token: token).username
+        } catch {
+            queue.lastfmLoginFailed(error)
+            throw error
+        }
         queue.credentialsChanged()
         await flush()
     }
@@ -226,8 +231,8 @@ final class AppModel {
         refreshCounts()
     }
 
-    func clearLastFMSuspension() {
-        queue.clearLastFMSuspension()
+    func resumeLastFM() {
+        queue.resumeLastFM()
         Task { await flush() }
     }
 
@@ -242,6 +247,55 @@ final class AppModel {
         listenbrainzUser = nil
         queue.credentialsChanged()
         refreshCounts()
+    }
+
+    // MARK: History, recap and Siri
+
+    /// ListenBrainz when connected (every device), otherwise this iPhone's plays.
+    var history: ListeningHistory {
+        ListeningHistory(listenbrainzUser: listenbrainzUser) { [queue] from, to in
+            queue.scrobbles(from: from, to: to)
+        }
+    }
+
+    var historySourceLabel: String {
+        listenbrainzUser.map { "From ListenBrainz (\($0)), every device" } ?? "From this iPhone's scrobbles"
+    }
+
+    func refreshRecap() async {
+        isLoadingRecap = true
+        defer { isLoadingRecap = false }
+        do {
+            let summary = try await history.summary(of: .thisWeek)
+            // The on-device sentence only changes when the counts do.
+            guard summary != recap || recapSentence == nil else { return }
+            recap = summary
+            recapSentence = await RecapNarrator.sentence(for: summary, period: "this week")
+        } catch {
+            Log.capture.error("Couldn't load the weekly recap: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Loves what's playing, or the last scrobble, on every connected service
+    /// that can take it. Returns what happened, for Siri to say.
+    func loveCurrentTrack() async -> String {
+        let player = MPMusicPlayerController.systemMusicPlayer.nowPlayingItem
+        let target: Scrobble? = if let player, let title = player.title, let artist = player.artist {
+            Scrobble(artist: artist, track: title, album: player.albumTitle,
+                     durationSec: player.playbackDuration > 0 ? Int(player.playbackDuration.rounded()) : nil,
+                     listenedAt: Date())
+        } else {
+            queue.latestScrobble()
+        }
+        guard let target else { return "Nothing has played yet, so there's nothing to love." }
+        let mbid = try? await resolver.resolve(
+            artist: target.artist, track: target.track, album: target.album, durationSec: target.durationSec
+        ).match?.recordingMBID
+        return await Love.send(
+            target, recordingMBID: target.recordingMBID ?? mbid,
+            lastfm: lastfmClient, lastfmSession: lastfmAuth?.sessionKey,
+            listenbrainz: listenbrainzClient, listenbrainzToken: listenbrainzAuth.token
+        )
     }
 
     /// Filled into Info.plist at build time from .env by scripts/inject-lastfm-keys.sh.
