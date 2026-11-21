@@ -6,14 +6,16 @@ struct PreferencesView: View {
         TabView {
             GeneralPane()
                 .tabItem { Label("General", systemImage: "gearshape") }
-            LastFMPane()
-                .tabItem { Label("Last.fm", systemImage: "dot.radiowaves.left.and.right") }
             ListenBrainzPane()
                 .tabItem { Label("ListenBrainz", systemImage: "headphones") }
+            LastFMPane()
+                .tabItem { Label("Last.fm", systemImage: "dot.radiowaves.left.and.right") }
+            WeekPane()
+                .tabItem { Label("This Week", systemImage: "chart.bar") }
             RecentScrobblesView()
                 .tabItem { Label("Scrobbles", systemImage: "list.bullet.rectangle") }
         }
-        .frame(width: 560, height: 460)
+        .frame(width: 580, height: 520)
     }
 }
 
@@ -27,15 +29,9 @@ private struct GeneralPane: View {
                 Toggle("Open ScrobbleKit at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, newValue in controller.launchesAtLogin = newValue }
             }
-            Section {
-                Toggle("Ignore other devices", isOn: .constant(true))
-                    .disabled(true)
-                Text("Always on here. Music on the Mac only reports this Mac's playback, so plays from your iPhone, HomePod or other devices never reach this app.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            OtherDevicesSection()
             Section("When a track counts") {
-                Text("A track is scrobbled once it has played for half its length or 4 minutes, whichever comes first. Tracks of 30 seconds or less are never scrobbled. Every scrobble goes to both Last.fm and ListenBrainz.")
+                Text("A track is scrobbled once it has played for half its length or 4 minutes, whichever comes first. Tracks of 30 seconds or less are never scrobbled. Every scrobble goes to ListenBrainz and Last.fm, whichever are connected; ListenBrainz also gets how long the track actually played.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -65,20 +61,20 @@ private struct LastFMPane: View {
                 Section {
                     Label("This build has no Last.fm API key", systemImage: "key.slash")
                         .foregroundStyle(.orange)
-                    Text("Add LASTFM_API_KEY and LASTFM_SHARED_SECRET to the .env file at the root of the repository, then build again.")
+                    Text("Add LASTFM_API_KEY and LASTFM_SHARED_SECRET to the .env file at the root of the repository, then build again. Since December 1, 2026, the Last.fm account that owns the key needs Last.fm Pro. ListenBrainz works without any of this.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
             } else {
-                if controller.queue.status.lastfm == .suspended {
+                if case .keyRejected(let code) = controller.queue.status.lastfm {
                     Section {
-                        Label("Last.fm suspended this app's API key", systemImage: "exclamationmark.octagon.fill")
+                        Label("Last.fm stopped accepting this app's API key", systemImage: "exclamationmark.octagon.fill")
                             .foregroundStyle(.red)
                             .font(.headline)
-                        Text("Last.fm answered with error 26, so scrobbling to Last.fm has stopped. Plays are still saved and still go to ListenBrainz. Once the key is sorted out (or replaced in .env), turn Last.fm back on.")
+                        Text("Last.fm answered with error \(code), so scrobbling to Last.fm has stopped. Since December 1, 2026, Last.fm only accepts an API key whose owner has Last.fm Pro. Plays are still saved and still go to ListenBrainz. If you built ScrobbleKit yourself, the key in .env is yours: once its account has Pro (or the key is replaced), turn Last.fm back on.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
-                        Button("Turn Last.fm Back On") { controller.clearLastFMSuspension() }
+                        Button("Turn Last.fm Back On") { controller.resumeLastFM() }
                     }
                 }
                 Section {
@@ -165,5 +161,73 @@ private struct ListenBrainzPane: View {
             }
             isConnecting = false
         }
+    }
+}
+
+/// "Catch plays from my other devices": the Mac reads the account's Recently
+/// Played every few minutes, and says how much of its own listening Apple
+/// listed there.
+private struct OtherDevicesSection: View {
+    @Environment(MenuBarController.self) private var controller
+
+    var body: some View {
+        Section {
+            Toggle("Catch plays from my other devices", isOn: Binding(
+                get: { controller.catchOtherDevices },
+                set: { on in Task { await controller.setCatchOtherDevices(on) } }
+            ))
+            Text("Every 3 minutes while this Mac is awake, ScrobbleKit reads your Apple Music account's Recently Played, which includes your iPhone, iPad and CarPlay, and scrobbles what no device has sent yet. Times are estimated to within a few minutes, and a song replayed between checks counts once. Plays already in your ListenBrainz history, such as ones ScrobbleKit on iPhone sent, are skipped.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if let error = controller.otherDevicesError {
+                Text(error).font(.caption).foregroundStyle(.red)
+            }
+            if controller.catchOtherDevices {
+                LabeledContent("Last checked") {
+                    if let last = controller.lastOtherDevicesCheck {
+                        Text(last, format: .relative(presentation: .named))
+                    } else {
+                        Text("Not yet")
+                    }
+                }
+                if let report = controller.captureReport, let percent = report.percent {
+                    LabeledContent("Recently Played listed") {
+                        Text("\(report.listed) of \(report.total) of this Mac's plays (\(percent)%)")
+                            .monospacedDigit()
+                    }
+                    Text("Of the plays this Mac caught exactly in the last 7 days, the share Apple's Recently Played also listed: a measured figure for how much Recently Played–based capture (ScrobbleKit on iPhone, or this check) picks up.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("Other devices")
+        }
+        .onAppear { controller.refreshCaptureReport() }
+    }
+}
+
+private struct WeekPane: View {
+    @Environment(MenuBarController.self) private var controller
+
+    var body: some View {
+        Form {
+            Section {
+                RecapView(summary: controller.recap, sentence: controller.recapSentence,
+                          sourceLabel: controller.historySourceLabel, isLoading: controller.isLoadingRecap)
+                    .padding(.vertical, 4)
+            } footer: {
+                HStack {
+                    Text("Ask Siri “What did I listen to in ScrobbleKit” or “My top artists in ScrobbleKit”.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Refresh") { Task { await controller.refreshRecap() } }
+                        .disabled(controller.isLoadingRecap)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .task { await controller.refreshRecap() }
     }
 }
