@@ -15,15 +15,19 @@ OUT=${OUT:-"$ROOT/build/release"}
 : "${ASC_KEY_ID:?set ASC_KEY_ID}"
 : "${ASC_ISSUER_ID:?set ASC_ISSUER_ID}"
 TEAM_ID=${TEAM_ID:-DT9JP293AM}
-AUTH="-allowProvisioningUpdates -authenticationKeyPath $ASC_KEY_PATH -authenticationKeyID $ASC_KEY_ID -authenticationKeyIssuerID $ASC_ISSUER_ID"
+
+# xcodebuild with the API key, so Xcode can create profiles and sign.
+xcodebuild_auth() {
+    xcodebuild "$@" -allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" \
+        -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+}
 
 cd "$ROOT"
 rm -rf "$OUT/ScrobbleKitiOS.xcarchive" "$OUT/ios"
 mkdir -p "$OUT"
 
-# shellcheck disable=SC2086
-xcodebuild archive -project Apps/ScrobbleKit.xcodeproj -scheme ScrobbleKitiOS -configuration Release \
-    -destination generic/platform=iOS -archivePath "$OUT/ScrobbleKitiOS.xcarchive" $AUTH
+xcodebuild_auth archive -project Apps/ScrobbleKit.xcodeproj -scheme ScrobbleKitiOS -configuration Release \
+    -destination generic/platform=iOS -archivePath "$OUT/ScrobbleKitiOS.xcarchive"
 
 cat > "$OUT/ExportOptions-ios.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -40,7 +44,6 @@ cat > "$OUT/ExportOptions-ios.plist" <<PLIST
 </plist>
 PLIST
 
-# shellcheck disable=SC2086
-xcodebuild -exportArchive -archivePath "$OUT/ScrobbleKitiOS.xcarchive" -exportPath "$OUT/ios" \
-    -exportOptionsPlist "$OUT/ExportOptions-ios.plist" $AUTH
+xcodebuild_auth -exportArchive -archivePath "$OUT/ScrobbleKitiOS.xcarchive" -exportPath "$OUT/ios" \
+    -exportOptionsPlist "$OUT/ExportOptions-ios.plist"
 echo "Uploaded. It shows in TestFlight after Apple processes it (usually 5 to 30 minutes)."
