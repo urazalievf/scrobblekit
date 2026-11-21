@@ -17,6 +17,17 @@ if you use it.
 
 > Screenshots: coming soon.
 
+## Install
+
+**Mac:** download `ScrobbleKit-mac-<version>.zip` from the
+[latest release](https://github.com/urazalievf/scrobblekit/releases/latest),
+unzip it and move **ScrobbleKit** to Applications. It's signed and notarized
+by Apple, and needs macOS 14 or later. The download sends to ListenBrainz;
+Last.fm needs a build with a Last.fm key (see below).
+
+**iPhone:** a TestFlight beta is on the way. Until then, build it yourself
+(see [Building](#building)).
+
 ## Last.fm from 1 December 2026
 
 From 1 December 2026, [Last.fm only accepts an API key whose owner has Last.fm
@@ -251,6 +262,16 @@ app). Turn on **Catch plays from my other devices** if you want your iPhone's
 plays caught from the Mac. On iPhone: finish onboarding, connect ListenBrainz
 (and Last.fm) in Settings, and add the Sync Scrobbles automations in
 Shortcuts.
+
+### Releasing
+
+`scripts/release-mac.sh` builds the Mac app for direct download: Developer ID
+signing, Apple notarization, stapling and a zip. `scripts/release-ios.sh`
+archives the iPhone app and uploads it to App Store Connect for TestFlight
+(`DESTINATION=export` writes the `.ipa` instead). Both read an App Store
+Connect API key from `ASC_KEY_PATH`, `ASC_KEY_ID` and `ASC_ISSUER_ID`; the
+comments at the top of each script list the certificates and profiles they
+expect.
 
 ### Tests
 

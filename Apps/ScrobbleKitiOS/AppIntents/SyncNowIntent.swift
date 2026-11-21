@@ -7,7 +7,7 @@ import ScrobbleCore
 struct SyncNowIntent: AppIntent {
     static let title: LocalizedStringResource = "Sync Scrobbles"
     static let description = IntentDescription(
-        "Checks Apple Music's Recently Played and sends waiting scrobbles to Last.fm and ListenBrainz."
+        "Checks Recently Played and sends waiting scrobbles to ListenBrainz and Last.fm."
     )
     static let openAppWhenRun = false
 
