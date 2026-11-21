@@ -25,8 +25,8 @@ unzip it and move **ScrobbleKit** to Applications. It's signed and notarized
 by Apple, and needs macOS 14 or later. The download sends to ListenBrainz;
 Last.fm needs a build with a Last.fm key (see below).
 
-**iPhone:** a TestFlight beta is on the way. Until then, build it yourself
-(see [Building](#building)).
+**iPhone:** a private TestFlight beta for [Patreon](https://www.patreon.com/furazaliev)
+supporters. Anyone can build it themselves (see [Building](#building)).
 
 ## Last.fm from 1 December 2026
 
@@ -224,6 +224,8 @@ It runs on your Mac and talks only to ListenBrainz. Listening history there is
 public, so it needs no token.
 
 ## Privacy and credentials
+
+The full policy is in [PRIVACY.md](PRIVACY.md).
 
 - The Last.fm session key and ListenBrainz token are stored in the Keychain,
   never in files.
