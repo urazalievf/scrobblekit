@@ -19,7 +19,8 @@ struct SyncNowIntent: AppIntent {
         await controller.checkOtherDevices()
         await controller.syncNow()
         let pending = controller.pendingCount
-        return .result(dialog: pending > 0 ? "Synced. \(pending) still waiting." : "Synced. Everything is sent.")
+        let dialog: IntentDialog = pending > 0 ? "Synced. \(pending) still waiting." : "Synced. Everything is sent."
+        return .result(dialog: dialog)
     }
 }
 
