@@ -10,6 +10,9 @@ public struct Scrobble: Sendable, Equatable {
     public var durationSec: Int?
     public var listenedAt: Date
     public var recordingMBID: String?
+    /// Seconds actually spent playing, when the player could tell (Mac, and
+    /// iPhone while the app is open). Not the track's length.
+    public var playedSec: Int?
 
     public init(
         artist: String,
@@ -18,7 +21,8 @@ public struct Scrobble: Sendable, Equatable {
         albumArtist: String? = nil,
         durationSec: Int? = nil,
         listenedAt: Date,
-        recordingMBID: String? = nil
+        recordingMBID: String? = nil,
+        playedSec: Int? = nil
     ) {
         self.artist = artist
         self.track = track
@@ -27,5 +31,6 @@ public struct Scrobble: Sendable, Equatable {
         self.durationSec = durationSec
         self.listenedAt = listenedAt
         self.recordingMBID = recordingMBID
+        self.playedSec = playedSec
     }
 }

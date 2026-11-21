@@ -51,6 +51,7 @@ public enum Dedup {
         if existing.albumArtist.isNilOrEmpty { existing.albumArtist = scrobble.albumArtist }
         if existing.recordingMBID.isNilOrEmpty { existing.recordingMBID = scrobble.recordingMBID }
         if existing.durationSec == 0, let duration = scrobble.durationSec { existing.durationSec = duration }
+        if existing.playedSec == nil { existing.playedSec = scrobble.playedSec }
         return .merged(existing)
     }
 }

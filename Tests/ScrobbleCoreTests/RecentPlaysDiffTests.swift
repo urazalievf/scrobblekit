@@ -70,3 +70,40 @@ final class OtherDeviceFilterTests: XCTestCase {
         XCTAssertEqual(kept.last?.listenedAt, t + 7200, "two hours later is a separate play")
     }
 }
+
+final class UncertaintyAwareFilterTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_700_100_000)
+
+    private func play(_ track: String, at date: Date, _ source: ScrobbleSource) -> DetectedPlay {
+        DetectedPlay(scrobble: Scrobble(artist: "Low", track: track, listenedAt: date), source: source)
+    }
+
+    func testDatedPlaysMatchWithinFifteenMinutes() {
+        let dated = play("Words", at: now - 3600, .poll)
+        let near = [Scrobble(artist: "Low", track: "Words", listenedAt: now - 3600 + 600)]
+        let far = [Scrobble(artist: "Low", track: "Words", listenedAt: now - 3600 + 1200)]
+        XCTAssertTrue(OtherDeviceFilter.isAlreadyScrobbled(dated, history: near, previousCheck: now - 180, now: now))
+        XCTAssertFalse(OtherDeviceFilter.isAlreadyScrobbled(dated, history: far, previousCheck: now - 180, now: now))
+    }
+
+    // An estimated time can be off by the whole gap since the previous check,
+    // and Apple lists plays late; the match covers that span.
+    func testInferredPlaysMatchAnywhereSinceThePreviousCheckLessTheListingLag() {
+        let previous = now - 8 * 3600 // the Mac was asleep overnight
+        let inferred = play("Words", at: now - 200, .inferred)
+        let sentByPhoneAtNight = [Scrobble(artist: "Low", track: "Words", listenedAt: previous + 3600)]
+        XCTAssertTrue(OtherDeviceFilter.isAlreadyScrobbled(inferred, history: sentByPhoneAtNight,
+                                                           previousCheck: previous, now: now))
+        let beforeTheGap = [Scrobble(artist: "Low", track: "Words", listenedAt: previous - 3 * 3600)]
+        XCTAssertFalse(OtherDeviceFilter.isAlreadyScrobbled(inferred, history: beforeTheGap,
+                                                            previousCheck: previous, now: now))
+    }
+
+    func testHistoryStartIsTheEarliestPossibleMatch() {
+        let previous = now - 600
+        let plays = [play("A", at: now - 100, .inferred), play("B", at: now - 5000, .poll)]
+        XCTAssertEqual(OtherDeviceFilter.historyStart(for: plays, previousCheck: previous),
+                       previous - OtherDeviceFilter.appleListingLag)
+        XCTAssertNil(OtherDeviceFilter.historyStart(for: [], previousCheck: previous))
+    }
+}

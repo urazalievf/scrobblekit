@@ -21,8 +21,11 @@ public enum ServiceState: Sendable, Equatable {
     case notConnected
     /// The service rejected the stored credentials; log in again.
     case needsLogin
-    /// Last.fm suspended the API key (error 26). Sending has stopped.
-    case suspended
+    /// Last.fm stopped accepting this build's API key: error 10 (invalid key)
+    /// or 26 (suspended key). Since 1 December 2026 Last.fm only accepts a key
+    /// whose owner has Last.fm Pro, and a key without it fails this way.
+    /// Sending to Last.fm has stopped until the user turns it back on.
+    case keyRejected(code: Int)
     /// The last send failed and will be retried.
     case failing(String)
 }
@@ -58,10 +61,16 @@ public final class ScrobbleQueue {
     @ObservationIgnored private let credentials: @Sendable () -> Credentials
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var isFlushing = false
+    /// Played times that arrived before their play was stored (the MusicBrainz
+    /// lookup in `enqueue` can still be running), by dedup key.
+    @ObservationIgnored private var earlyPlayedTimes: [String: Int] = [:]
 
     static let lastfmBatchSize = LastFMClient.maxBatchSize
     static let listenbrainzBatchSize = 100
-    private static let suspendedKey = "lastfm.apiKeySuspended"
+    /// The Last.fm error code that stopped sending, kept across launches.
+    private static let rejectedCodeKey = "lastfm.apiKeyRejectedCode"
+    /// Written by 0.1.0 for error 26; read once and replaced by `rejectedCodeKey`.
+    private static let legacySuspendedKey = "lastfm.apiKeySuspended"
     /// Last.fm ignored-message code for the daily scrobble limit, the one
     /// ignore reason worth retrying.
     private static let dailyLimitCode = 5
@@ -81,8 +90,15 @@ public final class ScrobbleQueue {
         self.resolver = resolver
         self.credentials = credentials
         self.defaults = defaults
-        let suspended = defaults.bool(forKey: Self.suspendedKey)
-        status = QueueStatus(lastfm: suspended ? .suspended : .unknown, listenbrainz: .unknown, lastFlush: nil)
+        if defaults.bool(forKey: Self.legacySuspendedKey) {
+            defaults.set(26, forKey: Self.rejectedCodeKey)
+            defaults.removeObject(forKey: Self.legacySuspendedKey)
+        }
+        let rejectedCode = defaults.integer(forKey: Self.rejectedCodeKey)
+        status = QueueStatus(
+            lastfm: rejectedCode != 0 ? .keyRejected(code: rejectedCode) : .unknown,
+            listenbrainz: .unknown, lastFlush: nil
+        )
     }
 
     // MARK: Adding plays
@@ -110,8 +126,43 @@ public final class ScrobbleQueue {
 
         let record = try Dedup.insertOrMerge(scrobble, source: source, into: context, now: now).record
         if record.releaseMBID == nil { record.releaseMBID = releaseMBID }
+        if record.playedSec == nil, let played = earlyPlayedTimes.removeValue(forKey: record.dedupKey) {
+            record.playedSec = played
+        }
         try context.save()
         return record
+    }
+
+    /// Stores how long a live play actually played, once it has ended
+    /// (`PlaybackTracker.Event.finished`). ListenBrainz gets the play after
+    /// this, with the played time; Last.fm has already had it.
+    public func recordPlayedTime(_ scrobble: Scrobble) {
+        guard let played = scrobble.playedSec else { return }
+        let key = Dedup.key(artist: scrobble.artist, track: scrobble.track, listenedAt: scrobble.listenedAt)
+        var descriptor = FetchDescriptor<ScrobbleRecord>(predicate: #Predicate { $0.dedupKey == key })
+        descriptor.fetchLimit = 1
+        guard let record = (try? context.fetch(descriptor))?.first else {
+            earlyPlayedTimes[key] = played
+            return
+        }
+        if record.playedSec == nil {
+            record.playedSec = played
+            save()
+        }
+    }
+
+    /// Grace after a live play's expected end before ListenBrainz gets it
+    /// without a played time (the app quit, or iOS suspended it mid-track).
+    static let playedTimeGrace: TimeInterval = 2 * 60
+    /// Assumed length when a live play's length is unknown.
+    static let unknownLengthHold: TimeInterval = 10 * 60
+
+    /// True while a live play may still be playing: ListenBrainz waits for
+    /// its played time instead of getting the listen without one.
+    static func awaitsPlayedTime(_ record: ScrobbleRecord, now: Date) -> Bool {
+        guard record.source.isLive, record.playedSec == nil, !record.listenbrainzSent else { return false }
+        let length = record.durationSec > 0 ? TimeInterval(record.durationSec) : unknownLengthHold
+        return now < record.listenedAt.addingTimeInterval(length + playedTimeGrace)
     }
 
     // MARK: Sending
@@ -120,7 +171,7 @@ public final class ScrobbleQueue {
     /// a now-playing update is only useful while the track plays.
     public func sendNowPlaying(_ scrobble: Scrobble) async {
         let credentials = credentials()
-        if let lastfm, let sessionKey = credentials.lastfmSessionKey, status.lastfm != .suspended {
+        if let lastfm, let sessionKey = credentials.lastfmSessionKey, !status.lastfm.isKeyRejected {
             do {
                 try await lastfm.updateNowPlaying(scrobble, sessionKey: sessionKey)
             } catch {
@@ -165,8 +216,8 @@ public final class ScrobbleQueue {
         let credentials = credentials()
         await flushLastFM(due.filter { !$0.lastfmSent }, sessionKey: credentials.lastfmSessionKey,
                           report: &report, fail: fail)
-        await flushListenBrainz(due.filter { !$0.listenbrainzSent }, token: credentials.listenbrainzToken,
-                                report: &report, fail: fail)
+        await flushListenBrainz(due.filter { !$0.listenbrainzSent && !Self.awaitsPlayedTime($0, now: now) },
+                                token: credentials.listenbrainzToken, report: &report, fail: fail)
 
         for record in due {
             guard let failure = failures[ObjectIdentifier(record)] else { continue }
@@ -182,7 +233,7 @@ public final class ScrobbleQueue {
         _ pending: [ScrobbleRecord], sessionKey: String?,
         report: inout FlushReport, fail: ([ScrobbleRecord], String, TimeInterval?) -> Void
     ) async {
-        guard status.lastfm != .suspended else { return }
+        guard !status.lastfm.isKeyRejected else { return }
         guard let lastfm, let sessionKey else {
             status.lastfm = .notConnected
             return
@@ -242,10 +293,11 @@ public final class ScrobbleQueue {
         switch error as? LastFMError {
         case .invalidSession:
             state = .needsLogin
-        case .apiKeySuspended:
-            defaults.set(true, forKey: Self.suspendedKey)
-            state = .suspended
-            Log.queue.fault("Last.fm suspended the API key (error 26); Last.fm scrobbling is off")
+        case .invalidAPIKey, .apiKeySuspended:
+            let code = (error as? LastFMError) == .invalidAPIKey ? 10 : 26
+            defaults.set(code, forKey: Self.rejectedCodeKey)
+            state = .keyRejected(code: code)
+            Log.queue.fault("Last.fm rejected the API key (error \(code)); Last.fm scrobbling is off")
         default:
             state = .failing(Self.describe(error))
         }
@@ -287,13 +339,16 @@ public final class ScrobbleQueue {
 
     // MARK: Managing records
 
-    /// Records still owed to a service that has credentials and hasn't given up.
-    public func pendingCount() -> Int {
+    /// Records still owed to a service that has credentials and hasn't given
+    /// up. A live play whose ListenBrainz send is only waiting for the track
+    /// to end doesn't count: nothing is wrong.
+    public func pendingCount(now: Date = Date()) -> Int {
         let credentials = credentials()
-        let wantsLastFM = lastfm != nil && credentials.lastfmSessionKey != nil && status.lastfm != .suspended
+        let wantsLastFM = lastfm != nil && credentials.lastfmSessionKey != nil && !status.lastfm.isKeyRejected
         let wantsListenBrainz = credentials.listenbrainzToken != nil
         return ((try? unsentRecords()) ?? []).filter {
-            (wantsLastFM && !$0.lastfmSent) || (wantsListenBrainz && !$0.listenbrainzSent)
+            (wantsLastFM && !$0.lastfmSent)
+                || (wantsListenBrainz && !$0.listenbrainzSent && !Self.awaitsPlayedTime($0, now: now))
         }.count
     }
 
@@ -315,16 +370,42 @@ public final class ScrobbleQueue {
         save()
     }
 
-    /// Re-enables Last.fm after a suspension, for example with a new API key.
-    public func clearLastFMSuspension() {
-        defaults.removeObject(forKey: Self.suspendedKey)
+    /// Turns Last.fm back on after it rejected the API key, for example once
+    /// the key's owner has Last.fm Pro or the key was replaced. If Last.fm
+    /// still rejects it, the next send turns it off again.
+    public func resumeLastFM() {
+        defaults.removeObject(forKey: Self.rejectedCodeKey)
         status.lastfm = .unknown
+    }
+
+    /// Call when a Last.fm login fails, so a rejected key is reported the same
+    /// way as when sending.
+    public func lastfmLoginFailed(_ error: Error) {
+        if (error as? LastFMError)?.rejectsAPIKey == true { handleLastFM(error) }
     }
 
     /// Marks a service as needing attention after credentials change.
     public func credentialsChanged() {
-        if status.lastfm != .suspended { status.lastfm = .unknown }
+        if !status.lastfm.isKeyRejected { status.lastfm = .unknown }
         status.listenbrainz = .unknown
+    }
+
+    /// Stored plays with `from <= listenedAt <= to`, optionally only from some
+    /// capture paths. For the recap, the Siri questions and duplicate checks.
+    public func scrobbles(from: Date, to: Date, sources: Set<ScrobbleSource>? = nil) -> [Scrobble] {
+        let descriptor = FetchDescriptor<ScrobbleRecord>(
+            predicate: #Predicate { $0.listenedAt >= from && $0.listenedAt <= to },
+            sortBy: [SortDescriptor(\.listenedAt, order: .reverse)]
+        )
+        let records = (try? context.fetch(descriptor)) ?? []
+        return records.filter { sources?.contains($0.source) ?? true }.map(\.scrobble)
+    }
+
+    /// The most recent stored play, with its MusicBrainz recording when known.
+    public func latestScrobble() -> Scrobble? {
+        var descriptor = FetchDescriptor<ScrobbleRecord>(sortBy: [SortDescriptor(\.listenedAt, order: .reverse)])
+        descriptor.fetchLimit = 1
+        return (try? context.fetch(descriptor))?.first?.scrobble
     }
 
     private func unsentRecords() throws -> [ScrobbleRecord] {

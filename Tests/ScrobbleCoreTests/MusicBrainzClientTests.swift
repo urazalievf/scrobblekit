@@ -24,7 +24,7 @@ final class MusicBrainzClientTests: XCTestCase {
 
         let request = try XCTUnwrap(transport.requests.first)
         XCTAssertEqual(request.httpMethod, "GET")
-        XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "ScrobbleKit/0.1.0 ( https://feruzurazaliev.com )")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "ScrobbleKit/0.2.0 ( https://feruzurazaliev.com )")
         XCTAssertEqual(
             request.url?.absoluteString,
             "https://musicbrainz.org/ws/2/recording/?query="
