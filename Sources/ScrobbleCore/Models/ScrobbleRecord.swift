@@ -15,6 +15,10 @@ public enum ScrobbleSource: String, Codable, Sendable, CaseIterable {
     case mac
     /// iOS app, when no more specific source applies.
     case ios
+
+    /// Sources that watch a player live and can report how long a track
+    /// played once it ends.
+    public var isLive: Bool { self == .mac || self == .foreground }
 }
 
 /// One play waiting to be, or already, sent to Last.fm and ListenBrainz.
@@ -36,6 +40,10 @@ public final class ScrobbleRecord {
     public var listenedAt: Date
     /// 0 when unknown.
     public var durationSec: Int
+    /// Seconds actually played, set when a live play ends; nil until then and
+    /// for plays found in Recently Played. Optional so existing stores
+    /// migrate without a default.
+    public var playedSec: Int?
     public var source: ScrobbleSource
     public var lastfmSent: Bool
     public var listenbrainzSent: Bool
@@ -58,6 +66,7 @@ public final class ScrobbleRecord {
         releaseMBID = nil
         listenedAt = scrobble.listenedAt
         durationSec = scrobble.durationSec ?? 0
+        playedSec = scrobble.playedSec
         self.source = source
         lastfmSent = false
         listenbrainzSent = false
@@ -73,7 +82,7 @@ public final class ScrobbleRecord {
         Scrobble(
             artist: artist, track: track, album: album, albumArtist: albumArtist,
             durationSec: durationSec > 0 ? durationSec : nil,
-            listenedAt: listenedAt, recordingMBID: recordingMBID
+            listenedAt: listenedAt, recordingMBID: recordingMBID, playedSec: playedSec
         )
     }
 

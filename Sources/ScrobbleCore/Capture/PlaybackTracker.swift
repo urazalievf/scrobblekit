@@ -50,6 +50,10 @@ public struct PlaybackTracker: Sendable {
         case nowPlaying(Scrobble)
         /// A play that has qualified.
         case scrobble(Scrobble)
+        /// A play that qualified earlier has ended (track change or stop).
+        /// Same artist, track and start time as its `.scrobble`, with
+        /// `playedSec` set to the time actually spent playing.
+        case finished(Scrobble)
     }
 
     public static let minimumDuration = 30
@@ -124,9 +128,14 @@ public struct PlaybackTracker: Sendable {
     }
 
     private mutating func finish(at now: Date) -> [Event] {
-        guard current != nil else { return [] }
+        guard let track = current else { return [] }
         pause(at: now)
-        let events = evaluate(at: now)
+        var events = evaluate(at: now)
+        if scrobbled {
+            var played = scrobble(for: track)
+            played.playedSec = Int(accumulated.rounded())
+            events.append(.finished(played))
+        }
         current = nil
         return events
     }

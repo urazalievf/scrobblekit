@@ -15,8 +15,8 @@ struct SettingsView: View {
         @Bindable var model = model
         NavigationStack {
             Form {
-                lastfmSection
                 listenbrainzSection
+                lastfmSection
 
                 Section {
                     Toggle("Ignore other devices", isOn: $model.ignoreOtherDevices)
@@ -34,7 +34,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Background")
                 } footer: {
-                    Text("For better coverage, open Shortcuts → Automation → New Automation → Time of Day, repeat hourly, and add the “Sync Scrobbles” action from ScrobbleKit.")
+                    Text("For better coverage, add personal automations in Shortcuts that run “Sync Scrobbles” without asking: when your headphones disconnect (Bluetooth), when CarPlay disconnects, and once late at night (Time of Day). Turn off “Ask Before Running” for each. With ScrobbleKit for Mac running and “Catch plays from my other devices” on, your iPhone's plays are covered without any of this.")
                 }
 
                 Section {
@@ -56,10 +56,13 @@ struct SettingsView: View {
     private var lastfmSection: some View {
         Section {
             if let key = model.lastfmAPIKey {
-                if model.queue.status.lastfm == .suspended {
-                    Label("Last.fm suspended this app's API key", systemImage: "exclamationmark.octagon.fill")
+                if case .keyRejected(let code) = model.queue.status.lastfm {
+                    Label("Last.fm stopped accepting this app's API key", systemImage: "exclamationmark.octagon.fill")
                         .foregroundStyle(.red)
-                    Button("Turn Last.fm Back On") { model.clearLastFMSuspension() }
+                    Text("Last.fm answered with error \(code). Since December 1, 2026, Last.fm only accepts an API key whose owner has Last.fm Pro. Your plays are still saved and still go to ListenBrainz. When the key works again, turn Last.fm back on.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Button("Turn Last.fm Back On") { model.resumeLastFM() }
                 }
                 if let user = model.lastfmUser {
                     LabeledContent("Account", value: user)
@@ -74,12 +77,12 @@ struct SettingsView: View {
             } else {
                 Label("This build has no Last.fm API key", systemImage: "key.slash")
                     .foregroundStyle(.orange)
-                Text("Add LASTFM_API_KEY and LASTFM_SHARED_SECRET to .env and build again.")
+                Text("Add LASTFM_API_KEY and LASTFM_SHARED_SECRET to .env and build again. Since December 1, 2026, the Last.fm account that owns the key needs Last.fm Pro. ListenBrainz works without any of this.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
         } header: {
-            Text("Last.fm")
+            Text("Last.fm (optional)")
         }
     }
 

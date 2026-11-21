@@ -11,9 +11,15 @@ let package = Package(
     ],
     products: [
         .library(name: "ScrobbleCore", targets: ["ScrobbleCore"]),
+        // A local MCP server over stdio: your ListenBrainz listening history
+        // for Claude Desktop, Claude Code and other MCP clients.
+        .executable(name: "scrobblekit-mcp", targets: ["scrobblekit-mcp"]),
     ],
     targets: [
         .target(name: "ScrobbleCore"),
+        .target(name: "ScrobbleMCP", dependencies: ["ScrobbleCore"]),
+        .executableTarget(name: "scrobblekit-mcp", dependencies: ["ScrobbleMCP"]),
         .testTarget(name: "ScrobbleCoreTests", dependencies: ["ScrobbleCore"]),
+        .testTarget(name: "ScrobbleMCPTests", dependencies: ["ScrobbleMCP", "ScrobbleCore"]),
     ]
 )

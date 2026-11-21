@@ -128,3 +128,88 @@ public struct ScrobbleRowView: View {
         .contentShape(Rectangle())
     }
 }
+
+/// The weekly recap: how many plays, the most played artists as bars, the
+/// top track, and (when the device can write one) a sentence from Apple's
+/// on-device model.
+public struct RecapView: View {
+    let summary: ListeningSummary?
+    let sentence: String?
+    let sourceLabel: String
+    let isLoading: Bool
+
+    public init(summary: ListeningSummary?, sentence: String?, sourceLabel: String, isLoading: Bool) {
+        self.summary = summary
+        self.sentence = sentence
+        self.sourceLabel = sourceLabel
+        self.isLoading = isLoading
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("This Week").font(.headline)
+                Spacer()
+                if isLoading { ProgressView().controlSize(.small) }
+            }
+            if let summary {
+                if summary.plays == 0 {
+                    Text("Nothing scrobbled yet this week.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("\(summary.plays) \(summary.plays == 1 ? "play" : "plays")")
+                        .font(.title2.weight(.bold))
+                        .contentTransition(.numericText())
+                    if let sentence {
+                        Text(sentence)
+                            .font(.callout)
+                            .transition(.opacity)
+                    }
+                    artistBars(summary)
+                    if let track = summary.topTracks.first {
+                        Label {
+                            Text("\(track.track) — \(track.artist) (\(track.listens))").lineLimit(1)
+                        } icon: {
+                            Image(systemName: "music.note")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+            } else if !isLoading {
+                Text("Couldn't load this week's plays.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            Text(sourceLabel)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .animation(.smooth, value: summary)
+        .animation(.smooth, value: sentence)
+    }
+
+    private func artistBars(_ summary: ListeningSummary) -> some View {
+        let top = Array(summary.topArtists.prefix(3))
+        let most = max(1, top.first?.listens ?? 1)
+        return VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(top.enumerated()), id: \.offset) { _, artist in
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(artist.name).font(.caption.weight(.medium)).lineLimit(1)
+                        Spacer()
+                        Text("\(artist.listens)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                    GeometryReader { proxy in
+                        Capsule()
+                            .fill(.tint.opacity(0.75))
+                            .frame(width: max(6, proxy.size.width * CGFloat(artist.listens) / CGFloat(most)))
+                    }
+                    .frame(height: 5)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}

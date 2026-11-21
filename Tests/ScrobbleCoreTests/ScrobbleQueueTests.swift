@@ -42,7 +42,7 @@ final class ScrobbleQueueTests: XCTestCase {
         for (index, track) in tracks.enumerated() {
             let scrobble = Scrobble(artist: "Artist", track: track, durationSec: 200,
                                     listenedAt: now - Double((tracks.count - index) * 300))
-            records.append(try await queue.enqueue(scrobble, source: .mac, now: now))
+            records.append(try await queue.enqueue(scrobble, source: .poll, now: now))
         }
         return records
     }
@@ -132,21 +132,110 @@ final class ScrobbleQueueTests: XCTestCase {
     }
 
     // Edge case: a banned client (error 26) stops Last.fm scrobbling and says so.
-    func testSuspendedAPIKeyDisablesLastFMUntilCleared() async throws {
+    func testSuspendedAPIKeyDisablesLastFMUntilResumed() async throws {
         let lastfm = StubTransport(.json(#"{"error":26,"message":"Suspended API key"}"#, status: 403))
         let queue = queue(lastfm: lastfm, listenbrainz: StubTransport(lbOK, lbOK))
         _ = try await enqueue(queue, ["One"])
         _ = await queue.flush(now: now)
-        XCTAssertEqual(queue.status.lastfm, .suspended)
+        XCTAssertEqual(queue.status.lastfm, .keyRejected(code: 26))
 
         _ = try await enqueue(queue, ["Two"])
         _ = await queue.flush(now: now + 3600)
-        XCTAssertEqual(lastfm.requests.count, 1, "no more Last.fm calls while suspended")
+        XCTAssertEqual(lastfm.requests.count, 1, "no more Last.fm calls while the key is rejected")
 
         let reopened = self.queue(lastfm: StubTransport(), listenbrainz: StubTransport())
-        XCTAssertEqual(reopened.status.lastfm, .suspended, "persists across launches")
-        reopened.clearLastFMSuspension()
+        XCTAssertEqual(reopened.status.lastfm, .keyRejected(code: 26), "persists across launches")
+        reopened.resumeLastFM()
         XCTAssertEqual(reopened.status.lastfm, .unknown)
+    }
+
+    // Since 1 December 2026 a key whose owner has no Last.fm Pro is refused;
+    // error 10 must stop sending the same way, not retry every play.
+    func testInvalidAPIKeyStopsLastFMWithoutCountingAttempts() async throws {
+        let lastfm = StubTransport(.json(#"{"error":10,"message":"Invalid API key"}"#, status: 403))
+        let queue = queue(lastfm: lastfm, listenbrainz: StubTransport(lbOK))
+        let record = try await enqueue(queue, ["One"])[0]
+        _ = await queue.flush(now: now)
+        XCTAssertEqual(queue.status.lastfm, .keyRejected(code: 10))
+        XCTAssertEqual(record.attempts, 0, "a rejected key isn't the play's fault")
+        XCTAssertFalse(record.lastfmSent)
+        XCTAssertTrue(record.listenbrainzSent, "ListenBrainz keeps working")
+        XCTAssertEqual(queue.pendingCount(now: now), 0, "plays only owed to a refused Last.fm aren't waiting")
+    }
+
+    func testRejectedKeyAtLoginIsReported() {
+        let queue = queue(lastfm: StubTransport(), listenbrainz: StubTransport())
+        queue.lastfmLoginFailed(LastFMError.invalidAPIKey)
+        XCTAssertEqual(queue.status.lastfm, .keyRejected(code: 10))
+        queue.resumeLastFM()
+        queue.lastfmLoginFailed(LastFMError.httpStatus(502))
+        XCTAssertEqual(queue.status.lastfm, .unknown, "other login failures don't stop Last.fm")
+    }
+
+    func testVersionZeroOneSuspensionCarriesOver() {
+        defaults.set(true, forKey: "lastfm.apiKeySuspended")
+        let queue = queue(lastfm: StubTransport(), listenbrainz: StubTransport())
+        XCTAssertEqual(queue.status.lastfm, .keyRejected(code: 26))
+        XCTAssertNil(defaults.object(forKey: "lastfm.apiKeySuspended"))
+    }
+
+    // MARK: Played time
+
+    private func livePlay(_ track: String, startedAt: Date, duration: Int = 200, played: Int? = nil) -> Scrobble {
+        Scrobble(artist: "Artist", track: track, durationSec: duration, listenedAt: startedAt, playedSec: played)
+    }
+
+    func testListenBrainzWaitsForALivePlayToEndThenGetsThePlayedTime() async throws {
+        let lastfm = StubTransport(lastfmAccepted(1))
+        let lb = StubTransport(lbOK)
+        let queue = queue(lastfm: lastfm, listenbrainz: lb)
+        let start = now - 100
+        let record = try await queue.enqueue(livePlay("One", startedAt: start), source: .mac, now: now)
+
+        _ = await queue.flush(now: now)
+        XCTAssertTrue(record.lastfmSent, "Last.fm gets it right away")
+        XCTAssertFalse(record.listenbrainzSent, "ListenBrainz waits while it may still be playing")
+        XCTAssertTrue(lb.requests.isEmpty)
+        XCTAssertEqual(queue.pendingCount(now: now), 0, "waiting for the end isn't shown as waiting")
+
+        queue.recordPlayedTime(livePlay("One", startedAt: start, played: 195))
+        _ = await queue.flush(now: now + 100)
+        XCTAssertTrue(record.listenbrainzSent)
+        let info = (lb.requests.first?.jsonBody?["payload"] as? [NSDictionary])?.first?
+            .value(forKeyPath: "track_metadata.additional_info") as? NSDictionary
+        XCTAssertEqual(info?["duration_played"] as? Int, 195)
+        XCTAssertEqual(info?["duration_ms"] as? Int, 200_000)
+    }
+
+    func testAPlayThatNeverEndsGoesToListenBrainzWithoutAPlayedTime() async throws {
+        let lb = StubTransport(lbOK)
+        let queue = queue(lastfm: StubTransport(lastfmAccepted(1)), listenbrainz: lb)
+        let start = now - 100
+        let record = try await queue.enqueue(livePlay("One", startedAt: start), source: .foreground, now: now)
+        _ = await queue.flush(now: now)
+        XCTAssertFalse(record.listenbrainzSent)
+
+        _ = await queue.flush(now: start + 200 + ScrobbleQueue.playedTimeGrace + 1)
+        XCTAssertTrue(record.listenbrainzSent)
+        let info = (lb.requests.first?.jsonBody?["payload"] as? [NSDictionary])?.first?
+            .value(forKeyPath: "track_metadata.additional_info") as? NSDictionary
+        XCTAssertNil(info?["duration_played"])
+    }
+
+    func testRecentlyPlayedFindsAreNotHeld() async throws {
+        let lb = StubTransport(lbOK)
+        let queue = queue(lastfm: StubTransport(lastfmAccepted(1)), listenbrainz: lb)
+        let record = try await queue.enqueue(livePlay("One", startedAt: now - 100), source: .poll, now: now)
+        _ = await queue.flush(now: now)
+        XCTAssertTrue(record.listenbrainzSent)
+    }
+
+    func testPlayedTimeThatArrivesBeforeThePlayIsStoredIsKept() async throws {
+        let queue = queue(lastfm: StubTransport(), listenbrainz: StubTransport())
+        let start = now - 300
+        queue.recordPlayedTime(livePlay("One", startedAt: start, played: 280))
+        let record = try await queue.enqueue(livePlay("One", startedAt: start), source: .mac, now: now)
+        XCTAssertEqual(record.playedSec, 280)
     }
 
     func testTenFailuresMarkPermanentlyFailed() async throws {
@@ -269,8 +358,15 @@ final class StatusSummaryTests: XCTestCase {
         XCTAssertEqual(summary(listenbrainz: .failing("ListenBrainz HTTP 503"), pending: 1).headline,
                        "Retrying: ListenBrainz HTTP 503")
         XCTAssertEqual(summary(pending: 2, failed: 1).headline, "1 scrobble failed")
-        XCTAssertEqual(summary(lastfm: .suspended, failed: 4).headline, "Last.fm suspended this app's API key")
+        XCTAssertEqual(summary(lastfm: .keyRejected(code: 10), failed: 4).headline,
+                       "Last.fm stopped accepting this app's API key")
         XCTAssertEqual(summary(connected: (false, false)).level, .problem)
+        XCTAssertEqual(summary(connected: (false, false)).headline, "Connect ListenBrainz or Last.fm")
         XCTAssertEqual(summary(connected: (true, false)).headline, "ListenBrainz not connected")
+    }
+
+    // ListenBrainz alone is a complete setup; Last.fm is optional.
+    func testListenBrainzWithoutLastFMIsAllGood() {
+        XCTAssertEqual(summary(connected: (false, true)), StatusSummary(level: .good, headline: "All caught up"))
     }
 }

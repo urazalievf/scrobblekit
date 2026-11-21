@@ -1,15 +1,20 @@
 import AppKit
+import MusicKit
 import ScrobbleCore
 import ServiceManagement
 import SwiftData
 
-/// Owns the Mac app's runtime: database, queue, Music.app watcher, logins and
-/// the 60-second flush loop. Views read its state; it's the only writer.
+/// Owns the Mac app's runtime: database, queue, Music.app watcher, the
+/// other-devices check, logins and the 60-second flush loop. Views read its
+/// state; it's the only writer.
 @MainActor
 @Observable
 final class MenuBarController {
     static let shared = MenuBarController()
     static let flushInterval: Duration = .seconds(60)
+    /// How often Recently Played is read while "Catch plays from my other
+    /// devices" is on. Estimated play times are off by at most about this.
+    static let otherDevicesInterval: Duration = .seconds(180)
 
     let container: ModelContainer
     let queue: ScrobbleQueue
@@ -29,9 +34,32 @@ final class MenuBarController {
     private(set) var isSyncing = false
     var lastfmLoginError: String?
 
+    /// Read Apple Music's account-wide Recently Played for plays from the
+    /// iPhone, CarPlay, iPad or HomePod. Off until the user turns it on.
+    private(set) var catchOtherDevices: Bool
+    private(set) var musicAuthorized = false
+    private(set) var lastOtherDevicesCheck: Date?
+    private(set) var otherDevicesError: String?
+    private(set) var captureReport: CaptureCheck.Report?
+
+    private(set) var recap: ListeningSummary?
+    private(set) var recapSentence: String?
+    private(set) var isLoadingRecap = false
+
     @ObservationIgnored private let resolver: MBIDResolver
     @ObservationIgnored private var watcher: MusicWatcher?
     @ObservationIgnored private var flushTask: Task<Void, Never>?
+    @ObservationIgnored private let lastfmClient: LastFMClient?
+    @ObservationIgnored private let listenbrainzClient = ListenBrainzClient()
+    /// 2 pages = the last 60 tracks, plenty for a check every 3 minutes.
+    @ObservationIgnored private let poller = RecentPlaysPoller(pages: 2)
+    @ObservationIgnored private let recentSync: RecentPlaysSync
+    @ObservationIgnored private let captureCheck = CaptureCheck()
+    @ObservationIgnored private var otherDevicesTask: Task<Void, Never>?
+
+    private enum Keys {
+        static let catchOtherDevices = "catchOtherDevices"
+    }
 
     private init() {
         do {
@@ -43,6 +71,7 @@ final class MenuBarController {
         let keys = Self.lastfmKeysFromBundle()
         lastfmAPIKey = keys?.apiKey
         let lastfmClient = keys.map { LastFMClient(apiKey: $0.apiKey, sharedSecret: $0.secret) }
+        self.lastfmClient = lastfmClient
         let lastfmAuth = lastfmClient.map { LastFMAuth(client: $0) }
         let listenbrainzAuth = ListenBrainzAuth()
         self.lastfmAuth = lastfmAuth
@@ -59,6 +88,9 @@ final class MenuBarController {
             }
         )
 
+        recentSync = RecentPlaysSync(poller: poller, queue: queue)
+        catchOtherDevices = UserDefaults.standard.bool(forKey: Keys.catchOtherDevices)
+        musicAuthorized = MusicAuthorization.currentStatus == .authorized
         lastfmUser = lastfmAuth?.username
         listenbrainzUser = listenbrainzAuth.username
         refreshCounts()
@@ -68,6 +100,7 @@ final class MenuBarController {
             onChange: { [weak self] track, playing in self?.trackChanged(track, playing: playing) }
         )
         startFlushLoop()
+        if catchOtherDevices { startOtherDevicesLoop() }
     }
 
     // MARK: Status
@@ -125,7 +158,79 @@ final class MenuBarController {
                 }
                 await syncNow()
             }
+        case .finished(let scrobble):
+            // ListenBrainz gets the play now, with how long it played.
+            queue.recordPlayedTime(scrobble)
+            Task { await syncNow() }
         }
+    }
+
+    // MARK: Other devices
+
+    /// Turning it on asks for Apple Music access the first time and starts
+    /// from a fresh baseline, so plays from before it was on aren't sent.
+    func setCatchOtherDevices(_ on: Bool) async {
+        otherDevicesError = nil
+        if on {
+            if MusicAuthorization.currentStatus != .authorized {
+                _ = await MusicAuthorization.request()
+            }
+            musicAuthorized = MusicAuthorization.currentStatus == .authorized
+            guard musicAuthorized else {
+                otherDevicesError = "ScrobbleKit isn't allowed to read Apple Music. Allow it in System Settings → Privacy & Security → Media & Apple Music, then turn this on again."
+                return
+            }
+            poller.reset()
+            captureCheck.start(at: Date())
+        } else {
+            otherDevicesTask?.cancel()
+            otherDevicesTask = nil
+            captureCheck.stop()
+            captureReport = nil
+            lastOtherDevicesCheck = nil
+        }
+        catchOtherDevices = on
+        UserDefaults.standard.set(on, forKey: Keys.catchOtherDevices)
+        if on { startOtherDevicesLoop() }
+    }
+
+    private func startOtherDevicesLoop() {
+        otherDevicesTask?.cancel()
+        otherDevicesTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.checkOtherDevices()
+                try? await Task.sleep(for: Self.otherDevicesInterval)
+            }
+        }
+    }
+
+    /// One Recently Played check. Plays this Mac caught itself, and plays
+    /// already in the user's ListenBrainz history, are skipped.
+    func checkOtherDevices() async {
+        guard catchOtherDevices else { return }
+        musicAuthorized = MusicAuthorization.currentStatus == .authorized
+        guard musicAuthorized else {
+            otherDevicesError = "ScrobbleKit lost access to Apple Music. Allow it in System Settings → Privacy & Security → Media & Apple Music."
+            return
+        }
+        do {
+            let outcome = try await recentSync.run(
+                listenbrainzUser: listenbrainzUser, checkListenBrainz: true, captureCheck: captureCheck
+            )
+            lastOtherDevicesCheck = Date()
+            otherDevicesError = nil
+            refreshCaptureReport()
+            if outcome.stored > 0 { await syncNow() }
+        } catch {
+            otherDevicesError = "Apple Music's Recently Played didn't answer: \(error.localizedDescription)"
+            Log.capture.error("Other-devices check failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    func refreshCaptureReport() {
+        let now = Date()
+        let mine = queue.scrobbles(from: now.addingTimeInterval(-CaptureCheck.period), to: now, sources: [.mac])
+        captureReport = captureCheck.report(exactPlays: mine, now: now)
     }
 
     // MARK: Sending
@@ -179,7 +284,10 @@ final class MenuBarController {
                 queue.credentialsChanged()
                 await syncNow()
             } catch {
-                lastfmLoginError = "Last.fm login failed: \(error)"
+                queue.lastfmLoginFailed(error)
+                lastfmLoginError = (error as? LastFMError)?.rejectsAPIKey == true
+                    ? "Last.fm didn't accept this build's API key, so logging in can't work."
+                    : "Last.fm login failed: \(error)"
             }
         }
     }
@@ -191,8 +299,8 @@ final class MenuBarController {
         refreshCounts()
     }
 
-    func clearLastFMSuspension() {
-        queue.clearLastFMSuspension()
+    func resumeLastFM() {
+        queue.resumeLastFM()
         Task { await syncNow() }
     }
 
@@ -209,6 +317,49 @@ final class MenuBarController {
         listenbrainzUser = nil
         queue.credentialsChanged()
         refreshCounts()
+    }
+
+    // MARK: History, recap and Siri
+
+    /// ListenBrainz when connected (every device), otherwise this Mac's plays.
+    var history: ListeningHistory {
+        ListeningHistory(listenbrainzUser: listenbrainzUser) { [queue] from, to in
+            queue.scrobbles(from: from, to: to)
+        }
+    }
+
+    var historySourceLabel: String {
+        listenbrainzUser.map { "From ListenBrainz (\($0)), every device" } ?? "From this Mac's scrobbles"
+    }
+
+    func refreshRecap() async {
+        isLoadingRecap = true
+        defer { isLoadingRecap = false }
+        do {
+            let summary = try await history.summary(of: .thisWeek)
+            // The on-device sentence only changes when the counts do.
+            guard summary != recap || recapSentence == nil else { return }
+            recap = summary
+            recapSentence = await RecapNarrator.sentence(for: summary, period: "this week")
+        } catch {
+            Log.capture.error("Couldn't load the weekly recap: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Loves what's playing, or the last scrobble. Returns what happened.
+    func loveCurrentTrack() async -> String {
+        let target: Scrobble? = nowPlaying.map {
+            Scrobble(artist: $0.artist, track: $0.title, album: $0.album, durationSec: $0.durationSec, listenedAt: Date())
+        } ?? queue.latestScrobble()
+        guard let target else { return "Nothing has played yet, so there's nothing to love." }
+        let mbid = try? await resolver.resolve(
+            artist: target.artist, track: target.track, album: target.album, durationSec: target.durationSec
+        ).match?.recordingMBID
+        return await Love.send(
+            target, recordingMBID: target.recordingMBID ?? mbid,
+            lastfm: lastfmClient, lastfmSession: lastfmAuth?.sessionKey,
+            listenbrainz: listenbrainzClient, listenbrainzToken: listenbrainzAuth.token
+        )
     }
 
     // MARK: Launch at login

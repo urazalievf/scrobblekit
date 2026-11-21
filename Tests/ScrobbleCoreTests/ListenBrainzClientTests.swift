@@ -48,9 +48,10 @@ final class ListenBrainzClientTests: XCTestCase {
                     "release_name": "Whenever You Need Somebody",
                     "additional_info": [
                         "submission_client": "ScrobbleKit",
-                        "submission_client_version": "0.1.0",
+                        "submission_client_version": "0.2.0",
                         "music_service": "music.apple.com",
                         "recording_mbid": "98255a8c-017a-4bc7-8dd6-1fa36124572b",
+                        "duration_ms": 213_000,
                     ],
                 ],
             ]],
@@ -71,12 +72,44 @@ final class ListenBrainzClientTests: XCTestCase {
                     "track_name": "Song",
                     "additional_info": [
                         "submission_client": "ScrobbleKit",
-                        "submission_client_version": "0.1.0",
+                        "submission_client_version": "0.2.0",
                         "music_service": "music.apple.com",
                     ],
                 ],
             ]],
         ] as NSDictionary)
+    }
+
+    func testPlayedTimeGoesInAdditionalInfoButNeverWithPlayingNow() async throws {
+        var listen = scrobble("Song")
+        listen.durationSec = 240
+        listen.playedSec = 231
+        let single = StubTransport(ok)
+        try await ListenBrainzClient(transport: single).submit([listen], as: .single, token: "T")
+        let info = (single.requests.first?.jsonBody?["payload"] as? [NSDictionary])?.first?
+            .value(forKeyPath: "track_metadata.additional_info") as? NSDictionary
+        XCTAssertEqual(info?["duration_ms"] as? Int, 240_000)
+        XCTAssertEqual(info?["duration_played"] as? Int, 231)
+        XCTAssertNil(info?["duration_played_ms"], "only one of the two keys")
+
+        let nowPlaying = StubTransport(ok)
+        try await ListenBrainzClient(transport: nowPlaying).submit([listen], as: .playingNow, token: "T")
+        let nowInfo = (nowPlaying.requests.first?.jsonBody?["payload"] as? [NSDictionary])?.first?
+            .value(forKeyPath: "track_metadata.additional_info") as? NSDictionary
+        XCTAssertEqual(nowInfo?["duration_ms"] as? Int, 240_000)
+        XCTAssertNil(nowInfo?["duration_played"])
+    }
+
+    func testOutOfRangeDurationsAreLeftOut() async throws {
+        var listen = scrobble("Song")
+        listen.durationSec = 0
+        listen.playedSec = 30 * 24 * 60 * 60
+        let transport = StubTransport(ok)
+        try await ListenBrainzClient(transport: transport).submit([listen], as: .single, token: "T")
+        let info = (transport.requests.first?.jsonBody?["payload"] as? [NSDictionary])?.first?
+            .value(forKeyPath: "track_metadata.additional_info") as? NSDictionary
+        XCTAssertNil(info?["duration_ms"])
+        XCTAssertNil(info?["duration_played"])
     }
 
     func testImportSendsEveryListenInOrder() async throws {
@@ -177,6 +210,79 @@ final class ListenBrainzClientTests: XCTestCase {
     }
 
     // MARK: validate-token
+
+    // MARK: Reading history
+
+    private func listensBody(_ timestamps: [Int]) -> StubTransport.Response {
+        let items = timestamps.map {
+            ##"{"listened_at":\##($0),"track_metadata":{"artist_name":"A","track_name":"T\##($0)"}}"##
+        }.joined(separator: ",")
+        return .json(##"{"payload":{"count":\##(timestamps.count),"listens":[\##(items)]}}"##)
+    }
+
+    func testListensInARangePageBackwardsAndStopAtTheStart() async throws {
+        let transport = StubTransport(listensBody([500, 400, 300]), listensBody([200, 100, 50]))
+        let listens = try await ListenBrainzClient(transport: transport).listens(
+            user: "me", from: Date(timeIntervalSince1970: 100), to: Date(timeIntervalSince1970: 500), limit: 3
+        )
+        XCTAssertEqual(listens.map(\.track), ["T500", "T400", "T300"], "the limit stops it")
+
+        let paged = StubTransport(listensBody([500, 400]), listensBody([300, 100]), listensBody([50]))
+        let all = try await ListenBrainzClient(transport: paged).listens(
+            user: "me", from: Date(timeIntervalSince1970: 100), to: Date(timeIntervalSince1970: 500), limit: 2
+        )
+        XCTAssertEqual(all.count, 2)
+
+        let ranged = StubTransport(listensBody([500, 400, 300]))
+        let bounded = try await ListenBrainzClient(transport: ranged).listens(
+            user: "me", from: Date(timeIntervalSince1970: 350), to: Date(timeIntervalSince1970: 500), limit: 10
+        )
+        XCTAssertEqual(bounded.map(\.track), ["T500", "T400"], "listens before the start are left out")
+        XCTAssertEqual(ranged.requests.count, 1, "a short page is the last one")
+    }
+
+    func testListensRangeRequestsUseMaxTimestamp() async throws {
+        let transport = StubTransport(listensBody([400, 300]), listensBody([]))
+        _ = try await ListenBrainzClient(transport: transport).listens(
+            user: "a b", from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 500), limit: 2
+        )
+        XCTAssertEqual(transport.requests.first?.url?.absoluteString,
+                       "https://api.listenbrainz.org/1/user/a%20b/listens?max_ts=501&count=2")
+        XCTAssertEqual(transport.requests.count, 1, "a full page at the limit stops")
+    }
+
+    func testTopArtistsAndTracksParseStatistics() async throws {
+        let artists = StubTransport(.json(#"{"payload":{"artists":[{"artist_name":"Low","listen_count":40},{"artist_name":"Björk","listen_count":31}],"range":"this_month"}}"#))
+        let top = try await ListenBrainzClient(transport: artists).topArtists(user: "me", range: .thisMonth, count: 2)
+        XCTAssertEqual(top, [ArtistCount(name: "Low", listens: 40), ArtistCount(name: "Björk", listens: 31)])
+        XCTAssertEqual(artists.requests.first?.url?.absoluteString,
+                       "https://api.listenbrainz.org/1/stats/user/me/artists?range=this_month&count=2")
+
+        let tracks = StubTransport(.json(#"{"payload":{"recordings":[{"track_name":"Words","artist_name":"Low","listen_count":12}]}}"#))
+        let topTracks = try await ListenBrainzClient(transport: tracks).topTracks(user: "me", range: .allTime)
+        XCTAssertEqual(topTracks, [TrackCount(track: "Words", artist: "Low", listens: 12)])
+    }
+
+    func testStatisticsNotComputedYetAreEmpty() async throws {
+        let transport = StubTransport(.init(status: 204, body: Data()))
+        let top = try await ListenBrainzClient(transport: transport).topArtists(user: "me", range: .thisYear)
+        XCTAssertEqual(top, [])
+    }
+
+    func testListenCount() async throws {
+        let transport = StubTransport(.json(#"{"payload":{"count":12345}}"#))
+        let count = try await ListenBrainzClient(transport: transport).listenCount(user: "me")
+        XCTAssertEqual(count, 12345)
+    }
+
+    func testLoveSendsRecordingFeedbackWithScoreOne() async throws {
+        let transport = StubTransport(ok)
+        try await ListenBrainzClient(transport: transport).love(recordingMBID: "abc", token: "T")
+        let request = try XCTUnwrap(transport.requests.first)
+        XCTAssertEqual(request.url?.absoluteString, "https://api.listenbrainz.org/1/feedback/recording-feedback")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Token T")
+        XCTAssertEqual(request.jsonBody, ["recording_mbid": "abc", "score": 1] as NSDictionary)
+    }
 
     func testValidTokenReturnsUserName() async throws {
         let transport = StubTransport(.json(

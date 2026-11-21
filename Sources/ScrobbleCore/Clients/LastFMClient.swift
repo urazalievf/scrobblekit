@@ -29,6 +29,10 @@ public struct LastFMScrobbleResult: Sendable, Equatable {
 public enum LastFMError: Error, Equatable {
     /// Error 9: the session key is no longer valid. The user must log in again.
     case invalidSession
+    /// Error 10: Last.fm doesn't accept this API key. Since 1 December 2026
+    /// that is also what happens when the account that owns the key doesn't
+    /// have Last.fm Pro. Retrying won't help; scrobbling to Last.fm should stop.
+    case invalidAPIKey
     /// Error 11: Last.fm is offline. Try again later.
     case serviceOffline
     /// Error 16: a temporary error on Last.fm's side. Try again later.
@@ -47,9 +51,16 @@ public enum LastFMError: Error, Equatable {
     /// `track.scrobble` takes 1 to 50 scrobbles per request.
     case invalidBatchSize(Int)
 
+    /// True for the errors that mean Last.fm won't take any request made with
+    /// this build's API key (10 and 26).
+    public var rejectsAPIKey: Bool {
+        self == .invalidAPIKey || self == .apiKeySuspended
+    }
+
     init(code: Int, message: String) {
         switch code {
         case 9: self = .invalidSession
+        case 10: self = .invalidAPIKey
         case 11: self = .serviceOffline
         case 16: self = .temporaryError
         case 26: self = .apiKeySuspended
@@ -123,6 +134,11 @@ public struct LastFMClient: Sendable {
             ignored: body.attr.ignored.value,
             ignoredCodes: body.scrobble.values.map(\.ignoredMessage.code.value)
         )
+    }
+
+    /// `track.love`: marks the track as loved on the user's Last.fm profile.
+    public func love(artist: String, track: String, sessionKey: String) async throws {
+        _ = try await call("track.love", ["artist": artist, "track": track], sessionKey: sessionKey)
     }
 
     /// Adds method, api_key, sk (if given), api_sig and format, sends the

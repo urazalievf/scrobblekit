@@ -173,6 +173,7 @@ final class LastFMClientTests: XCTestCase {
     func testErrorCodesMapToTypedErrors() async {
         let cases: [(code: Int, status: Int, expected: LastFMError)] = [
             (9, 403, .invalidSession),
+            (10, 403, .invalidAPIKey),
             (11, 503, .serviceOffline),
             (16, 500, .temporaryError),
             (29, 429, .rateLimitExceeded),
@@ -187,6 +188,24 @@ final class LastFMClientTests: XCTestCase {
                 try await self.client(transport).updateNowPlaying(self.scrobble("A", at: 0), sessionKey: "SK")
             }
         }
+    }
+
+    func testKeyRejectionCoversInvalidAndSuspendedKeys() {
+        XCTAssertTrue(LastFMError.invalidAPIKey.rejectsAPIKey)
+        XCTAssertTrue(LastFMError.apiKeySuspended.rejectsAPIKey)
+        XCTAssertFalse(LastFMError.invalidSession.rejectsAPIKey)
+        XCTAssertFalse(LastFMError.api(code: 13, message: "").rejectsAPIKey)
+    }
+
+    func testLoveIsASignedTrackLove() async throws {
+        let transport = StubTransport(.json(#"{}"#))
+        try await client(transport).love(artist: "Low", track: "Words", sessionKey: "SK")
+        let parameters = try XCTUnwrap(transport.requests.first).formParameters
+        XCTAssertEqual(parameters["method"], "track.love")
+        XCTAssertEqual(parameters["artist"], "Low")
+        XCTAssertEqual(parameters["track"], "Words")
+        XCTAssertEqual(parameters["sk"], "SK")
+        XCTAssertNotNil(parameters["api_sig"])
     }
 
     func testNonJSONErrorResponseMapsToHTTPStatus() async {

@@ -2,10 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>LSUIElement</key>
-	<true/>
-	<key>NSAppleEventsUsageDescription</key>
-	<string>ScrobbleKit asks Music for the current track once when it starts, so a song that is already playing gets scrobbled.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -17,9 +13,15 @@
 			</array>
 		</dict>
 	</array>
+	<key>LSUIElement</key>
+	<true/>
 	<key>LastFMAPIKey</key>
 	<string></string>
 	<key>LastFMSharedSecret</key>
 	<string></string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>ScrobbleKit asks Music for the current track once when it starts, so a song that is already playing gets scrobbled.</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>ScrobbleKit reads your Apple Music account's Recently Played, only when you turn on “Catch plays from my other devices”, so plays from your iPhone, CarPlay or iPad get scrobbled too.</string>
 </dict>
 </plist>
